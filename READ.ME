@@ -1,0 +1,238 @@
+  Drive Bench with Couchbase ForestDB
+=======================================
+
+Installation and Setup Document
+
+Install RHEL 6.5 with a non-root user, doing so will cause things to go badly.
+Select Destop 
+Register Redhat, you will need a Redhat Subscription
+
+After Installation and first login, edit .bash_profile to add proxy to the
+end of the file if appropriate for your site.
+
+	$export http_proxy=http://proxy.site.com:port
+	$export https_proxy=https://proxy.site.com:port
+
+Additionally, add the proxy to the bottom of /etc/yum.conf.
+	# The proxy server - proxy server:port number
+	>> proxy=http://proxy.site.com:port
+
+In /etc/rhsm/rhsm.conf edit lines to match:
+	# an http proxy server to use
+	>> proxy_hostname =proxy-fm.intel.com
+	# port for http proxy server
+	>> proxy_port =911
+
+Once changes are made reboot the server.
+
+Install the developer toolset
+
+	$ sudo yum groupinstall "Development Tools"
+	$ sudo yum install -y python-devel
+
+Issue command to install gcc 4.7 that will be needed to build the database engines
+
+	$ sudo wget http://people.centos.org/tru/devtools-1.1/devtools-1.1.repo -P /etc/yum.repos.d
+	$ sudo sh -c 'echo "enabled=1" >> /etc/yum.repos.d/devtools-1.1.repo'
+	
+Edit the devtools-1.1.repo file created in /etc/yum.repos.d from the variable $releasever to 6
+
+	$ sudo yum update
+	$ sudo yum -y install devtoolset-1.1
+
+Change the shell to use gcc 4.7 with:
+
+	$ scl enable devtoolset-1.1 bash
+	$ gcc --version
+	$ gcc (GCC) 4.7.2 20121015 (Red Hat 4.7.2-5)
+
+
+To install the proper python issue:
+	
+	$ sudo sh -c 'wget -qO- http://people.redhat.com/bkabrda/scl_python27.repo >> /etc/yum.repos.d/scl.repo'
+	$ sudo yum install python27
+	$ sudo yum install -y python27-python-devel.x86_64
+
+Verify installation by changing shell:
+
+	$ scl enable python27 bash
+	$ python -V
+	out> Python 2.7.3
+
+The Benchmarking software requires the building and installation of Couchbase forestdb, and ForestDB-Benchmark
+
+To aquire and build the source code for forestdb, and its dependencies run the command:
+
+	$ wget https://snappy.googlecode.com/files/snappy-1.1.1.tar.gz
+	$ tar -xvfz snappy-1.1.1.tar.gz
+	$ cd snappy-1.1.1
+	$ ./configure && make && sudo make install 
+	$ sudo yum install libaio-devel
+
+	$ wget http://www.cmake.org/files/v2.8/cmake-2.8.12.1.tar.gz
+	$ tar xvfz cmake-2.8.12.1.tar.gz
+	$ cd cmake-2.8.12.1
+	$ ./bootstrap && make && sudo make install
+
+	$ git clone https://github.com/couchbase/forestdb.git
+	$ cd forestdb
+	$ git clone https://github.com/couchbase/platform.git
+	$ mkdir build
+	$ cd build
+	$ cmake ../
+	$ make install
+
+Now to build the benchmark executables:	
+
+	$ git clone https://github.com/couchbaselabs/ForestDB-Benchmark.git
+	$ cd ForestDB-Benchmark
+	$ mkdir build
+	$ cd build
+	$ cmake ../
+	$ make install
+
+Following installation setup pip, the python package manager with:
+
+	$ sudo -E easy_install pip
+	$ sudo -E pip install requests[security]
+	$ sudo -E pip install numpy
+	$ sudo -E easy_install -U distribute
+	$ sudo -E pip install matplotlib
+
+(Here -E passes environmental variables such as LD_* necessary for correct installation)
+
+Setup /etc/fstab to automount drives in the correct locations (Using blkid list the drives and their UUID's for example):
+
+	>>
+	/dev/nvme0n1p1: UUID="1657eb8d-405a-4c0a-8f8a-ab450d03ca36" TYPE="ext4"
+	/dev/sdd1: UUID="a15656a3-1dd9-47c4-8cbd-a2efc54ded7d" TYPE="ext4"
+	/dev/sdb1: UUID="cdc0920b-f070-4156-b585-5690f9edc66d" TYPE="ext4"
+	/dev/sdc1: UUID="53425d60-cc2b-44c0-9d4e-d231b75697fd" TYPE="ext4"
+	<<
+
+Edit /etc/fstab to add the drive mount points by UUID (Note these UUID's will be different on every format). This prevents drives mounting in the improper order in the event of failure. Example:
+
+	>> (for file insertion below)
+	UUID=cdc0920b-f070-4156-b585-5690f9edc66d       /mnt/sas        ext4    defaults        0 0
+	# INTEL SATA S3710 SSD
+	UUID=53425d60-cc2b-44c0-9d4e-d231b75697fd       /mnt/sata       ext4    defaults        0 0
+	# HITACHI HUSML4020ASS600 SSD
+	UUID=a15656a3-1dd9-47c4-8cbd-a2efc54ded7d       /mnt/ssdh       ext4    defaults        0 0
+	# Intel NVMe P3700
+	UUID=1657eb8d-405a-4c0a-8f8a-ab450d03ca36       /mnt/nvme       ext4    defaults        0 0
+	<<
+
+Issue sudo mount -a and lsblk to verify drives have mounted.
+
+Check for system updates:
+
+	$ yum update
+
+Create repo file for nginx repository:
+
+	$ sudo nano /etc/yum.repos.d/nginx.repo 
+
+Paste into the file:
+
+	>>
+	[nginx]
+	name=nginx repo
+	baseurl=http://nginx.org/packages/rhel/6/$basearch/
+	gpgcheck=0
+	enabled=1
+	<<
+
+Run command to install nginx, and needed software:
+
+	$ sudo yum install nginx.x86_64
+	$ sudo -E pip install uwsgi
+	$ sudo -E pip install flask
+
+Copy the file dbench.conf to /etc/nginx/dbench.conf , the sources are located at
+
+	https://raw.githubusercontent.com/Borillion/DriveBench/master/dbench.conf
+
+Create directory /etc/uwsgi for configuration file, copy the file uwsgi_dbench.ini
+
+	https://raw.githubusercontent.com/Borillion/DriveBench/master/uwsgi_dbench.ini
+
+Execute:
+
+	$ sudo touch  /var/run/uwsgi_dbench.pid
+	$ sudo touch /usr/share/nginx/log/uwsgi_dbench.log
+	$ sudo mkdir /usr/share/nginx/app
+
+In the /etc/init.d/ directory create file /etc/init.d/uwsgi_dbench
+
+	https://raw.githubusercontent.com/Borillion/DriveBench/master/uwsgi_dbench
+
+In the newly created /usr/share/nginx/ copy app directory containing the python files from 
+
+	https://github.com/Borillion/DriveBench/tree/master/app
+
+For the first run the file must be edited to build the database for which to run against. The line in appbench in class threader, must be edited to for the first run. Please remember to set this back to where the –e is in the command, once you have a database built. –e utilizes an existing database, and will just run IO against that database.
+
+	command = bench + ' -f ' + file
+	
+With the –f flag your db build will take many minutes, possibly 30 minutes, or more depending on the media and size. It is therefore recommended that only one instance be executed at a time. You can then copy the instances you see below to create more databases.
+
+	$ sudo cp -rfvnp data_fdb0 data_fdb1
+
+
+You need to copy every instance that is created so you would create a file set 0, up to 7 more in case you want to run 8 instances of this test, and you can also copy these to other drives as needed for comparison testing of different storage interfaces and SSDs.
+
+In order to start the python program and the web interface, iptables  needs to be turned off as well as SELinux commandline to be made permissive:
+	
+	$ sudo service iptables stop
+	$ sudo setenforce permissive
+	
+To start the program and its supporting software we must first load the proper ini and then the uwsgi python daemon
+	
+	$ sudo service nginx start
+	$ sudo uwsgi --ini /etc/uwsgi/uwsgi_dbench.ini
+	$ sudo service uwsgi_dbench start
+	
+In order to avoid conflicts with nginx and multiple running instances of the program, please start nginx first, in the order you see above.
+
+In some cases it may be necessary to verify that uwsgi is running correctly and this can be verified by looking at the contents of the file located at ..log/uwsgi_dbench.log from the proceeding directory. If you followed the instructions: /usr/share/nginx/log is where the uwsgi logs will be reside
+
+What successful log output on startup is with 2 workers, plus one master.
+
+	*** Operational MODE: preforking ***
+	WSGI app 0 (mountpoint='') ready in 0 seconds on interpreter 0x1b30fa0 pid: 6690 (default app)
+	*** uWSGI is running in multiple interpreter mode ***
+	spawned uWSGI master process (pid: 6690)
+	spawned uWSGI worker 1 (pid: 6695, cores: 1)
+	spawned uWSGI worker 2 (pid: 6696, cores: 1)
+
+Another command:
+	
+	ps aux | grep uwsgi
+	
+Should show something similar to:
+
+	nginx      6690  1.6  0.0 304948 47928 ?        S    16:47   0:00 uwsgi --ini /etc/uwsgi/uwsgi_dbench.ini
+	nginx      6695  0.0  0.0 304948 37292 ?        S    16:47   0:00 uwsgi --ini /etc/uwsgi/uwsgi_dbench.ini
+	nginx      6696  0.0  0.0 304948 37292 ?        S    16:47   0:00 uwsgi --ini /etc/uwsgi/uwsgi_dbench.ini
+	nosql      6707  0.0  0.0 103368  2124 pts/0    S+   16:47   0:00 grep uwsgi
+
+Additionally: 
+
+	ps aux | grep nginx
+
+Should show:
+	
+	root       5364  0.0  0.0  44840   896 ?        Ss   14:27   0:00 nginx: master process /usr/sbin/nginx -c /etc/nginx/nginx.conf
+	nginx      5365  0.0  0.0  45264  3456 ?        S    14:27   0:00 nginx: worker process
+	nginx      6690  0.1  0.0 304948 47928 ?        S    16:47   0:00 uwsgi --ini /etc/uwsgi/uwsgi_dbench.ini
+	nginx      6695  0.0  0.0 304948 37292 ?        S    16:47   0:00 uwsgi --ini /etc/uwsgi/uwsgi_dbench.ini
+	nginx      6696  0.0  0.0 304948 37292 ?        S    16:47   0:00 uwsgi --ini /etc/uwsgi/uwsgi_dbench.ini
+	nosql      6718  0.0  0.0 103372  2060 pts/0    S+   16:50   0:00 grep nginx
+
+Notes:	
+After Copying files, set full read/write permissions on all necessary databases:
+$ sudo chown -Rfv nginx:nginx /mnt/nvme/data_fdb0
+$ sudo chmod 777 -Rfv /mnt/nvme/data_fdb0
+
+You can drive the gui from a local browser running on the server like Firefox or Google Chrome. 
+Utilize the url: http://localhost to drive the web application that delivers test results.
