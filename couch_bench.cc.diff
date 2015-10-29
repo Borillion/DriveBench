@@ -1,0 +1,13 @@
+--- /home/babak/ForestDB-Benchmark/bench/couch_bench.cc	2015-10-20 11:29:23.310629696 -0700
++++ /home/babak/ForestDB-Benchmark/bench/couch_bench.cc	2015-10-29 09:21:33.973131796 -0700
+@@ -1367,10 +1367,6 @@
+     uint64_t i, pos, begin, end;
+     double avg = 0;
+ 
+-    if (l_stat->nsamples < 100) {
+-        // more than 100 samples are necessary
+-        return;
+-    }
+     // sort
+     qsort(l_stat->samples, l_stat->nsamples, sizeof(uint32_t), _cmp_uint32_t);
+ 
