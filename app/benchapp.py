@@ -16,6 +16,7 @@ from os import remove, close
 import numpy as np
 
 import matplotlib as mpl
+import matplotlib.lines as mlines
 
 mpl.use("Agg")
 import matplotlib.pyplot as plt
@@ -100,7 +101,8 @@ class fileManager:
 		self.dbFilePaths = []
 		self.pattern = "filename = data/dummy"
 		self.logPath = "filename = logs/ops_log"	
-		
+		self.newLogPath = "filename = /mnt/os/logs/ops_log"
+   
 	def createFiles(self, dbSelected, target, instance):
 		dbPaths = []
 		devices = []
@@ -156,7 +158,7 @@ class fileManager:
 		
 		for path in dbFilePaths:
 			fHandle = tempfile.NamedTemporaryFile(delete=False)
-			dummyPath = "filename =  " + path
+			dummyPath = "filename =	" + path
 			fHandle = self.replace(fHandle.name, keySize, self.pattern, dummyPath)
 			fileHandles.append(fHandle)
 		self.dbFilePaths = fileHandles
@@ -165,10 +167,10 @@ class fileManager:
 	def updateLogfilePath(self, dbFilePaths):
 		i = 0
 		for ini in dbFilePaths:
-			self.update(ini, self.logPath, self.logPath + str(i))
+			self.update(ini, self.logPath, self.newLogPath + str(i))
 			i = i + 1
 		return
-
+		
 class threader:
 		def __init__(self):
 			self.threads = []
@@ -199,10 +201,11 @@ class processData:
 		self.statistics = []
 		self.read_opsArr = []
 		self.write_opsArr = []
+		self.benchmarkData = []
 	
 	def findLastLogs(self, numInstances):
 		files = []
-		files = glob.glob('./logs/*')
+		files = glob.glob('/mnt/os/logs/*')
 		files.sort(key=os.path.getmtime)
 		files.reverse()
 		files = files[:(numInstances)]
@@ -223,6 +226,7 @@ class processData:
 		return test
 		
 	def getDevice(self, device):
+		test = 0
 		if (device == 'nvme'):
 			test = 0
 		if (device == 'sata'):
@@ -235,7 +239,7 @@ class processData:
 		return test
 	
 	def ss_norm(self, norm):
-		regex = re.compile('[Norm]')  # etc.
+		regex = re.compile('[Norm]')	# etc.
 		stripped_norm = regex.sub('', norm)
 		norm_dist = stripped_norm.split(',')
 		return norm_dist
@@ -251,6 +255,9 @@ class processData:
 		line_num = 0
 		split_line = []
 
+		# print("=====getStats=======")
+		# pprint.pprint(stats)
+		# print("======end getStats ======")
 		statistics = {
 			'engine': 0,
 			'device': 0,
@@ -272,7 +279,6 @@ class processData:
 			'total_ops': 0,
 			'bytes_written': 0,
 			'GB_written': 0,
-			'bbytes_written': 0,
 			'bGB_written': 0,
 			'avg_write_put': 0,
 			'written_perdoc': 0,
@@ -282,43 +288,56 @@ class processData:
 		for line in stats:
 			split_line = line.split()
 			if (line_num == 0):
+				print(line_num, split_line)
 				statistics['engine'] = self.getEngine(self.strip(split_line[2]))
 			if (line_num == 1):
+				print(line_num, split_line)
 				statistics['device'] = self.getDevice(self.strip(split_line[1].split('/')[2]))
 			if (line_num == 2):
+				print(line_num, split_line)
 				statistics['documents'] = self.strip(split_line[6])
 			if (line_num == 3):
+				print(line_num, split_line)
 				statistics['thread_reader'] = re.sub('[\W_]+', '', (self.strip(split_line[3])))
 				statistics['thread_writer'] = re.sub('[\W_]+', '', self.strip(split_line[7]))
 			if (line_num == 4):
+				print(line_num, split_line)
 				statistics['cache_size'] = self.strip(split_line[3])
 			if (line_num == 5):
+				print(line_num, split_line)
 				statistics['key_len'] = self.ss_norm(self.strip((split_line[2])))[0]
 				statistics['key_len_dist'] = self.ss_norm(self.strip(split_line[2]))[1]
-				## 
 				statistics['body_len'] = self.ss_norm(self.strip(split_line[6]))[0]
 				statistics['body_len_dist'] = self.ss_norm(self.strip(split_line[6]))[1]
 			if (line_num == 6):
+				print(line_num, split_line)
 				statistics['duration'] = self.strip(split_line[2])
 			if (line_num == 7):
+				print(line_num, split_line)
 				statistics['reads'] = self.strip(split_line[0])
 				statistics['read_ops'] = self.strip(split_line[2])
 				statistics['read_us'] = self.strip(split_line[4])
 			if (line_num == 8):
+				print(line_num, split_line)
 				statistics['writes'] = self.strip(split_line[0])
 				statistics['write_ops'] = self.strip(split_line[2])
 				statistics['write_us'] = self.strip(split_line[4])
 			if (line_num == 9):
+				print(line_num, split_line)
 				statistics['total_ops'] = self.strip(split_line[1])
 			if (line_num == 10):
-				statistics['bytes_written'] = self.strip(split_line[2])
-				statistics['GB_written'] = self.strip(split_line[5])
+				print(line_num, split_line)
+				statistics['bytes_written'] = self.strip(split_line[1])
+				statistics['GB_written'] = self.strip(split_line[3])
 			if (line_num == 11):
-				statistics['bbytes_written'] = self.strip(split_line[1])
-				statistics['bGB_written'] = self.strip(split_line[3])
+				print(line_num, split_line)
+				statistics['bbytes_written'] = self.strip(split_line[2])
+				statistics['bGB_written'] = self.strip(split_line[5])
 			if (line_num == 12):
+				print(line_num, split_line)
 				statistics['avg_write_put'] = self.strip(split_line[4])
 			if (line_num == 13):
+				print(line_num, split_line)
 				statistics['written_perdoc'] = self.strip(split_line[0])
 				statistics['write_amp'] = self.strip(split_line[6])
 			line_num = line_num + 1
@@ -326,37 +345,105 @@ class processData:
 		return statistics
 	
 	def readStatLines(self, log_file):
-		list = [
+
+		stats = [] 
+		logFile = []
+		indices = []
+		
+		configList = [
 			"DB module:",
 			"filename: /mnt/",
 			"# documents (i.e. working set size):",
 			"# threads:",
 			"block cache size:",
 			"key length: Norm",
-			"benchmark duration:",
+			"benchmark duration:"
+			]
+			
+		elapsedStats = [
 			"us/read",
 			"us/write",
 			"total",
 			"bytes written",
 			"written during benchmark",
 			"average disk write throughput",
-			"written per doc update"]
-		stats = []
+			"update"
+			]
 
+		n = 0
 		with open(log_file) as file:
-			n = 0
 			for line in file:
-				if (n < len(list)):
-					if (list[n] in line):
-						stats.append(line)
-						n = n + 1
-		return stats
-   
-   
-
-		
+				n += 1
+				logFile.append(line)
+				if(line == "\n"):
+					indices.append(n)
 	
+		#print("=====logFile=======")
+		#pprint.pprint(self.logFiles)
+		#print("======end LogFile======")
 		
+		benchmarkConfig = logFile[indices[0]:indices[1]]
+		benchmarkElapesedStats = logFile[indices[2]:indices[3]]
+
+		benchmarkInstance = logFile[indices[1]:indices[2]][2:-1]
+		writeLatency = logFile[indices[3]:indices[4]][2:-1]
+		readLatency = logFile[indices[4]:indices[5]][2:-1]
+		totalElapsed = logFile[indices[5]:]
+
+		instanceData = []
+		writeLatencyData = []
+		readLatencyData = []	 
+	 
+		for x in benchmarkInstance:
+			instanceData.append([float(item) for item in x.split()])
+		self.benchmarkData.append(instanceData)
+		
+		for x in writeLatency:
+			writeLatencyData.append([float(item) for item in x.split()])
+		self.benchmarkData.append(writeLatencyData)
+	 
+		for x in readLatency:
+			readLatencyData.append([float(item) for item in x.split()])
+		self.benchmarkData.append(readLatencyData)
+	 
+		#pprint.pprint(writeLatency)
+		#pprint.pprint(readLatency)
+		#pprint.pprint(totalElapsed)
+
+		del logFile
+		del line
+		
+		
+		for txt in configList:
+			for line in benchmarkConfig:
+				if(txt in line):
+					location = benchmarkConfig.index(line)
+					stats.append(benchmarkConfig[location])
+
+
+
+		for txt in elapsedStats:
+			for line in benchmarkElapesedStats:
+				if ( (txt in line) and(line not in stats) ):
+					location = benchmarkElapesedStats.index(line)
+					stats.append(benchmarkElapesedStats[location])
+
+		return stats
+ 
+	 
+	 
+	def collectData(self):
+		dataset = []
+		for file in self.logFiles:
+			stats = self.getStats(self.readStatLines(file))
+			dataset.append(stats)
+		print("==== READ STAT LINES ===")
+		pprint.pprint(stats)
+		print("==== * READ STAT LINES * ===")
+		self.dataSet = dataset
+		return
+
+
 	def prepareData(self):
 		avg = {
 			'engine': 0,
@@ -409,14 +496,13 @@ class operationTracker():
 		self.writeOperationArray.append(writes)
 		return
 		
+
 class plotter():
 	def __init__(self):
 		self.my_string = "Take us to your leader!"
 		
 	def plotGraph(self, figure, dataSetOne, dataSetTwo, targetDevice):
-		if(len(dataSetOne) != len(dataSetTwo)):
-			print "Error: The datasets are of uneven lengths!"
-			return -1
+
 		
 		N = len(dataSetOne)
 		ind = np.arange(N)
@@ -424,7 +510,7 @@ class plotter():
 		fig, ax = plt.subplots()
 		rect1 = ax.bar(ind, dataSetOne, width, color='b')
 		rect2 = ax.bar(ind + width, dataSetTwo, width, color='r')
-		drive_name = ['Intel P3700', 'Intel S3710', 'Seagate SAS', 'Drive Space']
+		drive_name = ['Intel P3806', 'Intel P3700', 'Intel S3710', 'Seagate SAS']
 		ax.set_xticks(ind + width)
 		ax.set_xticklabels(('NVMe', drive_name[targetDevice]))
 		self.autolabel(rect1)
@@ -437,6 +523,65 @@ class plotter():
 			if (height > 0):
 				plt.text(rect.get_x() + rect.get_width() / 2., 1.015 * height, '%d' % (height),
 						ha='center')
+
+	def plotGraphs(self, datasetCollection1, datasetCollection2):
+		
+			"""Plot the reads and writes in a bar-chart"""
+		
+			fig = plt.figure()
+			ax1 = plt.subplot2grid((12, 14), (0, 0), colspan=10, rowspan=3)
+			ax2 = plt.subplot2grid((12, 14), (3, 0), colspan=10, rowspan=3)
+			ax3 = plt.subplot2grid((12, 14), (6, 0), colspan=10, rowspan=3)
+			ax4 = plt.subplot2grid((12, 14), (9, 0), colspan=10, rowspan=3)
+			
+			elapsedTime1 = np.array(datasetCollection1.benchmarkData[0])[:,[0]].tolist()
+			readOps1 = np.array(datasetCollection1.benchmarkData[0])[:,[3]].tolist()
+			writeops1 = np.array(datasetCollection1.benchmarkData[0])[:,[4]].tolist()
+			pprint.pprint(elapsedTime1)
+			wLsample1 = np.array(datasetCollection1.benchmarkData[1])[:,[0]]
+			wLval1 = np.array(datasetCollection1.benchmarkData[1])[:,[1]]	 
+			 
+			rLsample1 = np.array(datasetCollection1.benchmarkData[2])[:,[0]]
+			rLval1 = np.array(datasetCollection1.benchmarkData[2])[:,[1]]	 
+		
+			a = ax1.plot(wLsample1, wLval1, color='g')
+			b = ax2.plot(rLsample1, rLval1, color='m')
+			ax1.tick_params(axis='both', labelsize=8)
+			ax2.tick_params(axis='both', labelsize=8)
+			
+			aline_proxy = mlines.Line2D([], [], color='g')
+			bline_proxy = mlines.Line2D([], [], color='m')
+		
+			leg = plt.legend([aline_proxy, bline_proxy], ['Write Latency', 'Read Latency'], loc='upper right', bbox_to_anchor=(1.45,5.25))
+		
+		
+			# datasetCollection2
+		
+
+			elapsedTime2 = np.array(datasetCollection2.benchmarkData[0])[:,[0]].tolist()
+			readOps2 = np.array(datasetCollection2.benchmarkData[0])[:,[3]].tolist()
+			writeops2 = np.array(datasetCollection2.benchmarkData[0])[:,[4]].tolist()
+			
+			try:
+					wLsample2 = np.array(datasetCollection2.benchmarkData[1])[:,[0]]
+					wLval2 = np.array(datasetCollection2.benchmarkData[1])[:,[1]]	 
+					c = ax3.plot(wLsample2, wLval2, color='g')
+					ax3.tick_params(axis='both', labelsize=8)
+			except Exception:
+					pass			
+
+			rLsample2 = np.array(datasetCollection2.benchmarkData[2])[:,[0]]
+			rLval2 = np.array(datasetCollection2.benchmarkData[2])[:,[1]]	 
+				
+			d = ax4.plot(rLsample2, rLval2, color='m')
+			ax4.tick_params(axis='both', labelsize=8)
+
+			dt = str(datetime.datetime.now()).replace(" ", "").replace(".", "")
+			graphFigure = './static/graph' + dt + '.png'
+			#plt.subplots_adjust(hspace = 0.75)
+			fig.tight_layout()
+			fig.savefig(graphFigure)
+			return graphFigure
 
 
 
@@ -503,15 +648,12 @@ def echo():
 	tracker.setOpArray(nvmeDataCollection.write_opsArr, nvmeDataCollection.read_opsArr)
 	tracker.setOpArray(webDataCollection.write_opsArr, webDataCollection.read_opsArr)
 
-	dt = str(datetime.datetime.now()).replace(" ", "").replace(":", "").replace(".", "")
-	figure = './static/graph' + dt + '.png'
-		
-	testPlot = plotter()
-	testPlot.plotGraph(figure, tracker.readOperationArray,tracker.writeOperationArray, webInput.targetDevice)
-	
-	return jsonify(response=figure)
+	newPlot = plotter()
+	graphFigure = newPlot.plotGraphs(nvmeDataCollection, webDataCollection)
+	pprint.pprint(graphFigure)
+ 
+	return jsonify(response=graphFigure)
 
 
 if __name__ == '__main__':
 	app.run()
-
